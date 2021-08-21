@@ -3,18 +3,24 @@
     <nav-bar class="home-nav">
       <div slot="center">购物街</div>
     </nav-bar>
+    <tab-control :titles="['流行','新款','精选']"
+                 @tabClick="tabClick"
+                 ref="tabcontrol1"
+                 class="tab-control"
+                 v-show="isTabFixed"></tab-control>
     <scroll class="content"
             ref="scroll"
             :probe-type="3"
             @scroll="contentScroll"
             :pull-up-load="true"
             @pullingUp="loadMore">
-      <home-swiper :banners="banners"></home-swiper>
+      <home-swiper :banners="banners"
+                   @swiperImageLoad="swiperImageLoad"></home-swiper>
       <recommend-view :recommends="recommends"></recommend-view>
       <feature-view></feature-view>
-      <tab-control class="tab-control"
-                   :titles="['流行','新款','精选']"
-                   @tabClick="tabClick"></tab-control>
+      <tab-control :titles="['流行','新款','精选']"
+                   @tabClick="tabClick"
+                   ref="tabcontrol2"></tab-control>
       <goods-list :goods="showGoods"></goods-list>
     </scroll>
     <back-top @click.native="backClick"
@@ -37,6 +43,8 @@ import BackTop from 'components/content/backTop/BackTop'
 import { getHomeMultidata, getHomeGoods } from 'network/home';
 
 
+import { itemListenerMixin } from 'common/mixin'
+
 
 export default {
   name: "Home",
@@ -52,6 +60,7 @@ export default {
     BackTop
 
   },
+  mixins: [itemListenerMixin],
   data () {
     return {
       banners: [],
@@ -62,20 +71,34 @@ export default {
         'sell': { page: 0, list: [] },
       },
       currentType: 'pop',
-      isBackTopShow: false
+      isBackTopShow: false,
+      tabOffsetTop: 0,
+      isTabFixed: false,
+      saveY: 0
     }
   },
   computed: {
-    showGoods () {
+    showGoods () {//在这里通过这个计算属性动态的展示数据
       return this.goods[this.currentType].list
     }
+  },
+  activated () {
+    this.$refs.scroll.scrollTo(0, this.saveY, 0)
+    this.$refs.scroll.refresh()//这里最好刷新一次 不然可能会出现错误
+  },
+  deactivated () {
+    // 1.保存Y值使回来的时候保持原样
+    this.saveY = this.$refs.scroll.getScrollY()
+
+    // 2.取消全局事件监听
+    this.$bus.$off('itemImageLoad', this.itemImgListener)
   },
   created () {
     //  1.请求多个数据
     this.getHomeMultidata()
 
 
-    // 2.请求商品数据
+    // 2.请求商品数据并存放到goods里面
     this.getHomeGoods('pop')
     this.getHomeGoods('new')
     this.getHomeGoods('sell')
@@ -85,7 +108,8 @@ export default {
       事件监听相关的方法
  
     */
-    tabClick (index) {
+
+    tabClick (index) {//tabcontrol发送事件到父组件 传递三个选项的index 
       switch (index) {
         case 0:
           this.currentType = 'pop'
@@ -97,6 +121,8 @@ export default {
           this.currentType = 'sell'
           break;
       }
+      this.$refs.tabcontrol1.currentIndex = index;
+      this.$refs.tabcontrol2.currentIndex = index;
     },
     //回到顶部处理方法
     backClick () {
@@ -107,17 +133,22 @@ export default {
     },
     //回到顶部小图标显示隐藏方法
     contentScroll (position) {
+      // 1.判断把backtop是否显示
       this.isBackTopShow = -position.y > 1000
+
+      // 2.决定tabcontrol是否吸顶
+      this.isTabFixed = (-position.y) > this.tabOffsetTop
     },
-    //下拉加载更多方法
     loadMore () {
-
       this.getHomeGoods(this.currentType)
-
-      // 因为图片都是异步加载的 bscroll一开始就已经计算好了可以滚动的高度
-      //  解决偶尔滚动不下来的bug的方法
-      this.$refs.scroll.scroll.refresh()
     },
+    // 2.获取tabcontrol的offsettop
+    // 所有组件都有一个属性$el：用于获取组件中的元素
+
+    swiperImageLoad () {
+      this.tabOffsetTop = this.$refs.tabcontrol2.$el.offsetTop
+    },
+
 
     // 将网络请求数据函数封装到方法里面
     getHomeMultidata () {
@@ -144,26 +175,21 @@ export default {
 
 <style scoped>
 #home {
-  padding-top: 44px;
+  /* padding-top: 44px; */
   height: 100vh;
   position: relative;
 }
 .home-nav {
   background-color: var(--color-tint);
   color: #fff;
-
+  /* 
   position: fixed;
   left: 0;
   top: 0;
   right: 0;
-  z-index: 9;
+  z-index: 9; */
 }
-.tab-control {
-  /* 这个属性当top到达设定的值的时候 会将定位改成固定定位 */
-  /* position: sticky; */
-  top: 44px;
-  z-index: 9;
-}
+
 .content {
   /* height: 300px; */
   overflow: hidden;
@@ -172,6 +198,11 @@ export default {
   bottom: 49px;
   left: 0;
   right: 0;
+}
+.tab-control {
+  position: relative;
+  z-index: 9;
+  transform: translateZ(999px);
 }
 /* .content {
   height: calc(100% - 93px);
