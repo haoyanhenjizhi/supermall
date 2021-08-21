@@ -4,7 +4,7 @@ import router from './router'
 import store from './store'
 
 import toast from 'components/common/toast'
-
+import VueLazyLoad from 'vue-lazyload'
 Vue.config.productionTip = false
 
 Vue.use(toast)
@@ -14,3 +14,4 @@ new Vue({
   router,
   store
 }).$mount('#app')
+Vue.use(VueLazyLoad)
